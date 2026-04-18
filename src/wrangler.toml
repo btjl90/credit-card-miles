@@ -1,0 +1,26 @@
+name = "bestmiles-api"
+main = "index.ts"
+compatibility_date = "2024-04-15"
+
+[site]
+bucket = "../apps/web/dist"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "bestmiles-db"
+database_id = "d9d7f518-580f-4475-bc19-e2532d6e717d"
+
+migrations_dir = "drizzle/migrations"
+
+[[kv_namespaces]]
+binding = "CACHE"
+id = "180a4c643e444e85b94b655e5265112a"
+
+# T&C Monitor — free Cloudflare Cron (no cost, no usage-based billing)
+# Runs at 9am SGT on the 1st of every month
+[triggers]
+crons = ["0 9 1 * *"]
+
+# Env vars — set via `wrangler secret put`:
+# GOOGLE_API_KEY: Gemini API key (free tier — https://aistudio.google.com/apikey)
+# TC_DISCORD_WEBHOOK_URL: Discord webhook URL (see Discord setup guide below)
