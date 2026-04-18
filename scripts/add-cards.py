@@ -12,7 +12,7 @@ OAuth2 setup:
     1. Create a GCP service account and download the JSON key
     2. Share your Google Sheet with the service account email
        (found in the JSON under "client_email")
-    3. Set SERVICE_ACCOUNT_KEY path below, or set GOOGLE_SERVICE_ACCOUNT_KEY env var
+    3. Set GOOGLE_SERVICE_ACCOUNT_KEY env var to the JSON key path
 """
 
 import os
@@ -21,11 +21,7 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 
 # ─── CONFIG ─────────────────────────────────────────────────────────────────
-# Path to your service account JSON key
-SERVICE_ACCOUNT_KEY = os.environ.get(
-    "GOOGLE_SERVICE_ACCOUNT_KEY",
-    "/Users/bentan/Documents/GitHub/credit-card-miles/workspaces/credit-card-miles/keys/best-miles-c48a9cf03d59.json"
-)
+SERVICE_ACCOUNT_KEY = os.environ["GOOGLE_SERVICE_ACCOUNT_KEY"]
 
 SPREADSHEET_ID = "1Vx_gyV09OezNiUL6sBztt14iP2KUaRp4CGm-UB8hqEU"
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
@@ -153,7 +149,7 @@ def main():
     sheets = get_sheets_service()
 
     print(f"Writing to spreadsheet: {SPREADSHEET_ID}")
-    print(f"Using service account: {SERVICE_ACCOUNT_KEY}\n")
+    print(f"Using service account from GOOGLE_SERVICE_ACCOUNT_KEY env var\n")
 
     print("=== Cards ===")
     for row in CARDS:
