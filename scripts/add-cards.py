@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """
-Add credit cards to Google Sheets via OAuth2 (service account).
+Sync credit card data to Google Sheets via OAuth2 (service account).
+Replaces append-only behaviour with update-or-append: existing rows are
+updated in place, new rows are appended.
 
 Usage:
     python3 add-cards.py
@@ -34,15 +36,60 @@ def get_sheets_service():
     return build("sheets", "v4", credentials=creds)
 
 
-def append_rows(sheets, sheet_name, rows):
-    """Append rows to a sheet tab. Returns the updated range."""
-    result = sheets.spreadsheets().values().append(
+def read_sheet(sheets, sheet_name):
+    """Read all values from a sheet tab. Returns list of rows."""
+    result = sheets.spreadsheets().values().get(
         spreadsheetId=SPREADSHEET_ID,
         range=f"{sheet_name}!A:Z",
-        valueInputOption="USER_ENTERED",
-        body={"values": rows},
     ).execute()
-    return result.get("updates", {}).get("updatedRange", "?")
+    return result.get("values", [])
+
+
+def sync_rows(sheets, sheet_name, key_indices, rows):
+    """
+    Sync rows to a sheet: update existing rows (matched by key_indices) or
+    append new ones. key_indices is a list of column offsets used as a
+    composite lookup key. Returns (updated_count, appended_count).
+    """
+    existing = read_sheet(sheets, sheet_name)
+
+    # Build lookup: tuple(key_cols) -> row number (1-based, accounts for header)
+    key_to_row = {}
+    for i, row in enumerate(existing):
+        if i == 0:  # skip header
+            continue
+        key = tuple(row[j] if j < len(row) else "" for j in key_indices)
+        key_to_row[key] = i + 1  # 1-based sheet row
+
+    updated = 0
+    appended = 0
+
+    for row in rows:
+        key = tuple(row[j] for j in key_indices)
+        if key in key_to_row:
+            # Update existing row in place
+            row_num = key_to_row[key]
+            col_start = chr(ord("A") + key_indices[0])
+            col_end_letter = chr(ord("A") + len(row) - 1)
+            range_str = f"{sheet_name}!{col_start}{row_num}:{col_end_letter}{row_num}"
+            sheets.spreadsheets().values().update(
+                spreadsheetId=SPREADSHEET_ID,
+                range=range_str,
+                valueInputOption="USER_ENTERED",
+                body={"values": [row]},
+            ).execute()
+            updated += 1
+        else:
+            # Append new row
+            sheets.spreadsheets().values().append(
+                spreadsheetId=SPREADSHEET_ID,
+                range=f"{sheet_name}!A:Z",
+                valueInputOption="USER_ENTERED",
+                body={"values": [row]},
+            ).execute()
+            appended += 1
+
+    return updated, appended
 
 
 # ─── CARD DATA ───────────────────────────────────────────────────────────────
@@ -151,20 +198,20 @@ def main():
     print(f"Writing to spreadsheet: {SPREADSHEET_ID}")
     print(f"Using service account from GOOGLE_SERVICE_ACCOUNT_KEY env var\n")
 
+    # Cards: lookup by column A (card id)
     print("=== Cards ===")
-    for row in CARDS:
-        rng = append_rows(sheets, "Cards", [row])
-        print(f"  {row[1]}: {rng}")
+    upd, app = sync_rows(sheets, "Cards", [0], CARDS)
+    print(f"  {upd} updated, {app} appended")
 
+    # BonusCategories: composite key (card_id, category) = columns A, B
     print("\n=== Bonus Categories ===")
-    for row in BONUS_CATEGORIES:
-        rng = append_rows(sheets, "BonusCategories", [row])
-        print(f"  {row[0]} / {row[1]}: {rng}")
+    upd, app = sync_rows(sheets, "BonusCategories", [0, 1], BONUS_CATEGORIES)
+    print(f"  {upd} updated, {app} appended")
 
+    # Exclusions: composite key (card_id, category) = columns A, B
     print("\n=== Exclusions ===")
-    for row in EXCLUSIONS:
-        rng = append_rows(sheets, "Exclusions", [row])
-        print(f"  {row[0]} / {row[1]}: {rng}")
+    upd, app = sync_rows(sheets, "Exclusions", [0, 1], EXCLUSIONS)
+    print(f"  {upd} updated, {app} appended")
 
     print("\nAll done!")
 
